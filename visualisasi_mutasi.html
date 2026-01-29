@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisasi Arus Mutasi Pegawai</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #a0a0a0;
+            margin-bottom: 20px;
+        }
+
+        .stats-container {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px 35px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(79, 172, 254, 0.2);
+        }
+
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #a0a0a0;
+            margin-top: 5px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            color: #a0a0a0;
+        }
+
+        select,
+        input[type="number"] {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+            cursor: pointer;
+        }
+
+        select:hover,
+        input[type="number"]:hover {
+            border-color: #4facfe;
+        }
+
+        select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+
+        #sankey-chart {
+            width: 100%;
+            min-height: 800px;
+        }
+
+        .node rect {
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        .node:hover rect {
+            opacity: 0.8;
+        }
+
+        .node text {
+            pointer-events: none;
+            font-size: 11px;
+            fill: #e8e8e8;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        .link {
+            fill: none;
+            stroke-opacity: 0.4;
+            transition: stroke-opacity 0.3s ease;
+        }
+
+        .link:hover {
+            stroke-opacity: 0.7;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(79, 172, 254, 0.3);
+            border-radius: 12px;
+            padding: 15px 20px;
+            pointer-events: none;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            max-width: 350px;
+        }
+
+        .tooltip-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #4facfe;
+            margin-bottom: 8px;
+        }
+
+        .tooltip-content {
+            font-size: 0.85rem;
+            color: #c0c0c0;
+            line-height: 1.5;
+        }
+
+        .legend-container {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .legend-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #4facfe;
+            margin-bottom: 15px;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Arus Mutasi Pegawai</h1>
+            <p class="subtitle">Visualisasi aliran perpindahan pegawai berdasarkan wilayah kota</p>
+        </header>
+
+        <div class="stats-container" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-mutasi">-</div>
+                <div class="stat-label">Total Mutasi</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-kota-asal">-</div>
+                <div class="stat-label">Kota Asal</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-kota-tujuan">-</div>
+                <div class="stat-label">Kota Tujuan</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="top-flow">-</div>
+                <div class="stat-label">Arus Terbesar</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="mutation-type">Jenis Mutasi:</label>
+                <select id="mutation-type">
+                    <option value="all">Semua</option>
+                    <option value="ar">Account Representative</option>
+                    <option value="pelaksana">Pelaksana</option>
+                    <option value="promosi">Promosi (Pelaksana → AR)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="min-flow">Minimum Arus:</label>
+                <input type="number" id="min-flow" value="3" min="1" max="100">
+            </div>
+            <div class="control-group">
+                <label for="view-mode">Tampilan:</label>
+                <select id="view-mode">
+                    <option value="city">Per Kota</option>
+                    <option value="kanwil">Per Kanwil</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div id="sankey-chart"></div>
+        </div>
+
+        <div class="legend-container" id="legend-container">
+            <div class="legend-title">Top 10 Arus Mutasi Terbesar</div>
+            <div class="legend-items" id="legend-items"></div>
+        </div>
+
+        <footer>
+            <p>Data berdasarkan PENG-535/PJ/PJ.01/2023</p>
+        </footer>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        // Global data containers
+        let MUTASI_DATA = [];
+        let KANTOR_MAP = {}; // Maps KPP name -> { kota, kanwil }
+
+        // Color palette
+        const colorPalette = [
+            '#4facfe', '#00f2fe', '#ff6b6b', '#feca57', '#48dbfb',
+            '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff6348',
+            '#2ed573', '#1e90ff', '#ffa502', '#7bed9f', '#70a1ff',
+            '#eccc68', '#ff7f50', '#20bf6b', '#eb3b5a', '#3867d6'
+        ];
+
+        // Parse CSV helper - handles quoted fields with commas
+        function parseCSV(text, delimiter = ',') {
+            const lines = [];
+            let currentLine = [];
+            let currentField = '';
+            let inQuotes = false;
+
+            // Normalize line endings
+            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+
+                if (inQuotes) {
+                    if (char === '"' && nextChar === '"') {
+                        // Escaped quote
+                        currentField += '"';
+                        i++;
+                    } else if (char === '"') {
+                        // End of quoted field
+                        inQuotes = false;
+                    } else {
+                        currentField += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        // Start of quoted field
+                        inQuotes = true;
+                    } else if (char === delimiter) {
+                        // Field separator
+                        currentLine.push(currentField.trim());
+                        currentField = '';
+                    } else if (char === '\n') {
+                        // End of line
+                        currentLine.push(currentField.trim());
+                        if (currentLine.length > 1 || currentLine[0] !== '') {
+                            lines.push(currentLine);
+                        }
+                        currentLine = [];
+                        currentField = '';
+                    } else {
+                        currentField += char;
+                    }
+                }
+            }
+
+            // Handle last field/line
+            if (currentField || currentLine.length > 0) {
+                currentLine.push(currentField.trim());
+                lines.push(currentLine);
+            }
+
+            if (lines.length === 0) return [];
+
+            // Parse headers and create objects
+            const headers = lines[0].map(h => h.replace(/^\ufeff/, ''));
+            return lines.slice(1).map(row => {
+                const obj = {};
+                headers.forEach((h, i) => obj[h] = row[i] || '');
+                return obj;
+            });
+        }
+
+        // Load data from CSV files
+        async function loadData() {
+            try {
+                // Load kantor mapping
+                const kantorResponse = await fetch('hasil_join_kantor.csv');
+                const kantorText = await kantorResponse.text();
+                const kantorData = parseCSV(kantorText, ';');
+
+                // Build lookup map from KPP name
+                kantorData.forEach(row => {
+                    const namaKantor = row['Nama Kantor'] || '';
+                    KANTOR_MAP[namaKantor] = {
+                        kota: row['Kota'] || '',
+                        kanwil: row['Nama Kantor Wilayah'] || ''
+                    };
+                });
+
+                // Load mutasi data
+                const mutasiResponse = await fetch('mutasi_anonim.csv');
+                const mutasiText = await mutasiResponse.text();
+                MUTASI_DATA = parseCSV(mutasiText, ',');
+
+                console.log(`Loaded ${Object.keys(KANTOR_MAP).length} kantor mappings`);
+                console.log(`Loaded ${MUTASI_DATA.length} mutasi records`);
+
+                return true;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                return false;
+            }
+        }
+
+        // Extract KPP name from jabatan string - convert to CSV format
+        function extractKPPName(jabatan) {
+            // Handle special KPP types (Wajib Pajak Besar, PMA, etc.)
+            const specialPatterns = [
+                /Kantor Pelayanan Pajak\s+(Wajib Pajak Besar)\s+(\w+)/i,
+                /Kantor Pelayanan Pajak\s+(Penanaman Modal Asing)\s+(\w+)/i,
+                /Kantor Pelayanan Pajak\s+(Badan dan Orang Asing)/i,
+                /Kantor Pelayanan Pajak\s+(Minyak dan Gas Bumi)/i,
+                /Kantor Pelayanan Pajak\s+(Perusahaan Masuk Bursa)/i
+            ];
+
+            for (const pattern of specialPatterns) {
+                const match = jabatan.match(pattern);
+                if (match) {
+                    return match[2] ? `KPP ${match[1]} ${match[2]}` : `KPP ${match[1]}`;
+                }
+            }
+
+            // Handle Madya Dua pattern (must be before Madya)
+            const madyaDuaMatch = jabatan.match(/Kantor Pelayanan Pajak\s+Madya Dua\s+([^,]+)/i);
+            if (madyaDuaMatch) {
+                return `KPP Madya Dua ${madyaDuaMatch[1].trim()}`;
+            }
+
+            // Handle Madya pattern
+            const madyaMatch = jabatan.match(/Kantor Pelayanan Pajak\s+Madya\s+([^,]+)/i);
+            if (madyaMatch) {
+                return `KPP Madya ${madyaMatch[1].trim()}`;
+            }
+
+            // Handle Pratama pattern
+            const pratamaMatch = jabatan.match(/Kantor Pelayanan Pajak\s+Pratama\s+([^,]+)/i);
+            if (pratamaMatch) {
+                return `KPP Pratama ${pratamaMatch[1].trim()}`;
+            }
+
+            return null;
+        }
+
+        // Get city from office name - now uses kantor mapping
+        function getCity(officeName) {
+            const kppName = extractKPPName(officeName);
+
+            if (kppName) {
+                // Try exact match first
+                if (KANTOR_MAP[kppName]) {
+                    return KANTOR_MAP[kppName].kota || kppName;
+                }
+
+                // Try matching by removing Kota/Kabupaten prefix from kota field
+                for (const [name, data] of Object.entries(KANTOR_MAP)) {
+                    if (name === kppName) {
+                        return data.kota || kppName;
+                    }
+                }
+            }
+
+            // Handle special Jakarta offices
+            if (officeName.includes('Wajib Pajak Besar') ||
+                officeName.includes('Penanaman Modal Asing') ||
+                officeName.includes('Badan dan Orang Asing') ||
+                officeName.includes('Minyak dan Gas Bumi') ||
+                officeName.includes('Perusahaan Masuk Bursa')) {
+                return 'Jakarta Khusus';
+            }
+
+            // Handle Kantor Wilayah and Direktorat
+            if (officeName.includes('Kantor Wilayah DJP')) {
+                const match = officeName.match(/Kantor Wilayah DJP\s+([^,]+)/i);
+                return match ? `Kanwil ${match[1].trim()}` : 'Kanwil Lainnya';
+            }
+
+            if (officeName.includes('Direktorat') || officeName.includes('Bagian')) {
+                return 'Kantor Pusat';
+            }
+
+            // Fallback: extract location name from jabatan
+            let city = officeName
+                .replace(/Account Representative\s+/gi, '')
+                .replace(/Pelaksana\s+/gi, '')
+                .replace(/Penelaah Keberatan\s+/gi, '')
+                .replace(/Kantor Pelayanan Pajak\s+/gi, '')
+                .replace(/Pratama\s+/gi, '')
+                .replace(/Madya Dua\s+/gi, '')
+                .replace(/Madya\s+/gi, '')
+                .trim();
+
+            city = city.replace(/\s+(Satu|Dua|Tiga|Empat|Lima|Enam|I{1,3}V?|IV|V|VI)$/gi, '');
+            return city || 'Unknown';
+        }
+
+        // Get kanwil from office name - now uses kantor mapping
+        function getKanwil(officeName) {
+            const kppName = extractKPPName(officeName);
+
+            if (kppName) {
+                // Try exact match first
+                if (KANTOR_MAP[kppName]) {
+                    return KANTOR_MAP[kppName].kanwil || 'Lainnya';
+                }
+            }
+
+            // Handle special Jakarta offices
+            if (officeName.includes('Wajib Pajak Besar') ||
+                officeName.includes('Penanaman Modal Asing') ||
+                officeName.includes('Badan dan Orang Asing') ||
+                officeName.includes('Minyak dan Gas Bumi') ||
+                officeName.includes('Perusahaan Masuk Bursa')) {
+                return 'Kanwil Wajib Pajak Besar';
+            }
+
+            // Handle Kantor Wilayah
+            if (officeName.includes('Kantor Wilayah DJP')) {
+                const match = officeName.match(/Kantor Wilayah DJP\s+([^,]+)/i);
+                return match ? `Kanwil ${match[1].trim()}` : 'Lainnya';
+            }
+
+            // Handle Direktorat and central offices
+            if (officeName.includes('Direktorat') || officeName.includes('Bagian')) {
+                return 'Kantor Pusat';
+            }
+
+            return 'Lainnya';
+        }
+
+        // Helper function to check mutation type
+        function getMutationType(jabatanLama, jabatanBaru) {
+            const isLamaPelaksana = jabatanLama.toLowerCase().includes('pelaksana');
+            const isBaruPelaksana = jabatanBaru.toLowerCase().includes('pelaksana');
+            const isLamaAR = jabatanLama.toLowerCase().includes('account representative');
+            const isBaruAR = jabatanBaru.toLowerCase().includes('account representative');
+
+            if (isLamaPelaksana && isBaruAR) return 'promosi';
+            if (isLamaAR && isBaruAR) return 'ar';
+            if (isLamaPelaksana && isBaruPelaksana) return 'pelaksana';
+            return 'other';
+        }
+
+        function processAndRender() {
+            const minFlow = parseInt(document.getElementById('min-flow').value) || 10;
+            const viewMode = document.getElementById('view-mode').value;
+            const mutationType = document.getElementById('mutation-type').value;
+
+            // Filter data based on mutation type
+            let filteredData = MUTASI_DATA;
+            if (mutationType !== 'all') {
+                filteredData = MUTASI_DATA.filter(row => {
+                    const type = getMutationType(row['Jabatan Lama'], row['Jabatan Baru']);
+                    return type === mutationType;
+                });
+            }
+
+            // Process flows
+            const flows = {};
+
+            filteredData.forEach(row => {
+                let source = getCity(row['Jabatan Lama']);
+                let target = getCity(row['Jabatan Baru']);
+
+                if (viewMode === 'kanwil') {
+                    source = getKanwil(row['Jabatan Lama']);
+                    target = getKanwil(row['Jabatan Baru']);
+                }
+
+                // Skip self-flows
+                if (source === target) return;
+
+                const key = `${source}|||${target}`;
+                flows[key] = (flows[key] || 0) + 1;
+            });
+
+            // Filter by minimum flow
+            const filteredFlows = Object.entries(flows)
+                .filter(([_, value]) => value >= minFlow)
+                .sort((a, b) => b[1] - a[1]);
+
+            // Build nodes and links
+            const nodeSet = new Set();
+            const links = [];
+
+            filteredFlows.forEach(([key, value]) => {
+                const [source, target] = key.split('|||');
+                nodeSet.add(source + ' (Asal)');
+                nodeSet.add(target + ' (Tujuan)');
+                links.push({
+                    source: source + ' (Asal)',
+                    target: target + ' (Tujuan)',
+                    value: value,
+                    sourceCity: source,
+                    targetCity: target
+                });
+            });
+
+            const nodes = Array.from(nodeSet).map(name => ({ name }));
+
+            // Update stats
+            const totalMutasi = filteredData.length;
+            const kotaAsal = new Set(filteredData.map(r => getCity(r['Jabatan Lama']))).size;
+            const kotaTujuan = new Set(filteredData.map(r => getCity(r['Jabatan Baru']))).size;
+            const topFlow = filteredFlows[0] ? filteredFlows[0][1] : 0;
+
+            document.getElementById('total-mutasi').textContent = totalMutasi.toLocaleString();
+            document.getElementById('total-kota-asal').textContent = kotaAsal;
+            document.getElementById('total-kota-tujuan').textContent = kotaTujuan;
+            document.getElementById('top-flow').textContent = topFlow;
+
+            renderSankey({ nodes, links });
+            updateLegend(filteredFlows.slice(0, 10));
+        }
+
+        function renderSankey(data) {
+            const container = document.getElementById('sankey-chart');
+            container.innerHTML = '';
+
+            if (data.links.length === 0) {
+                container.innerHTML = '<p style="text-align:center;padding:50px;color:#a0a0a0;">Tidak ada data yang memenuhi filter. Coba kurangi nilai minimum arus.</p>';
+                return;
+            }
+
+            const margin = { top: 20, right: 250, bottom: 20, left: 250 };
+            const width = Math.max(1400, container.clientWidth) - margin.left - margin.right;
+            const height = Math.max(800, data.nodes.length * 20);
+
+            const svg = d3.select('#sankey-chart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            const sankey = d3.sankey()
+                .nodeWidth(20)
+                .nodePadding(12)
+                .extent([[0, 0], [width, height]])
+                .nodeId(d => d.name);
+
+            const { nodes, links } = sankey({
+                nodes: data.nodes.map(d => Object.assign({}, d)),
+                links: data.links.map(d => Object.assign({}, d))
+            });
+
+            const colorScale = d3.scaleOrdinal()
+                .domain(nodes.map(d => d.name))
+                .range(colorPalette);
+
+            // Links
+            svg.append('g')
+                .selectAll('.link')
+                .data(links)
+                .join('path')
+                .attr('class', 'link')
+                .attr('d', d3.sankeyLinkHorizontal())
+                .attr('stroke', d => colorScale(d.source.name))
+                .attr('stroke-width', d => Math.max(1, d.width))
+                .on('mouseover', function (event, d) {
+                    showTooltip(event, `${d.sourceCity} → ${d.targetCity}`, `<strong>Jumlah Mutasi:</strong> ${d.value} orang`);
+                    d3.select(this).attr('stroke-opacity', 0.7);
+                })
+                .on('mousemove', moveTooltip)
+                .on('mouseout', function () {
+                    hideTooltip();
+                    d3.select(this).attr('stroke-opacity', 0.4);
+                });
+
+            // Nodes
+            const node = svg.append('g')
+                .selectAll('.node')
+                .data(nodes)
+                .join('g')
+                .attr('class', 'node')
+                .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+            node.append('rect')
+                .attr('height', d => d.y1 - d.y0)
+                .attr('width', sankey.nodeWidth())
+                .attr('fill', d => colorScale(d.name))
+                .attr('rx', 3)
+                .on('mouseover', function (event, d) {
+                    const isSource = d.name.includes('(Asal)');
+                    const relatedLinks = links.filter(l => isSource ? l.source === d : l.target === d);
+                    const total = relatedLinks.reduce((sum, l) => sum + l.value, 0);
+                    const details = relatedLinks
+                        .sort((a, b) => b.value - a.value)
+                        .slice(0, 5)
+                        .map(l => `${isSource ? l.targetCity : l.sourceCity}: ${l.value}`)
+                        .join('<br>');
+
+                    showTooltip(event,
+                        d.name.replace(/ \(Asal\)| \(Tujuan\)/g, ''),
+                        `<strong>Total:</strong> ${total} mutasi<br><br><strong>Top 5 ${isSource ? 'Tujuan' : 'Asal'}:</strong><br>${details}`
+                    );
+                })
+                .on('mousemove', moveTooltip)
+                .on('mouseout', hideTooltip);
+
+            // Labels
+            node.append('text')
+                .attr('x', d => d.x0 < width / 2 ? -6 : sankey.nodeWidth() + 6)
+                .attr('y', d => (d.y1 - d.y0) / 2)
+                .attr('dy', '0.35em')
+                .attr('text-anchor', d => d.x0 < width / 2 ? 'end' : 'start')
+                .text(d => {
+                    const label = d.name.replace(/ \(Asal\)| \(Tujuan\)/g, '');
+                    return label.length > 30 ? label.substring(0, 27) + '...' : label;
+                });
+        }
+
+        function updateLegend(topFlows) {
+            const legendItems = document.getElementById('legend-items');
+            legendItems.innerHTML = topFlows.map(([key, value], index) => {
+                const [source, target] = key.split('|||');
+                return `<div class="legend-item">
+                    <div class="legend-color" style="background: ${colorPalette[index]}"></div>
+                    <span>${source} → ${target} (${value})</span>
+                </div>`;
+            }).join('');
+        }
+
+        function showTooltip(event, title, content) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML = `<div class="tooltip-title">${title}</div><div class="tooltip-content">${content}</div>`;
+            tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.left = (event.pageX + 15) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        // Event listeners
+        document.getElementById('mutation-type').addEventListener('change', processAndRender);
+        document.getElementById('min-flow').addEventListener('change', processAndRender);
+        document.getElementById('view-mode').addEventListener('change', processAndRender);
+
+        // Initialize with async data loading
+        async function init() {
+            const loaded = await loadData();
+            if (loaded) {
+                processAndRender();
+            } else {
+                document.getElementById('sankey-chart').innerHTML = '<p style="text-align:center;padding:50px;color:#ff6b6b;">Error loading data. Please run this page from a local server.</p>';
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

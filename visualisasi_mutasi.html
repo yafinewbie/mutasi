@@ -179,7 +179,109 @@
             pointer-events: none;
             z-index: 1000;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            max-width: 350px;
+            max-width: 400px;
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid rgba(79, 172, 254, 0.3);
+            border-radius: 16px;
+            padding: 25px;
+            max-width: 90%;
+            max-height: 80%;
+            overflow: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px 12px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 107, 107, 0.3);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-table th {
+            background: rgba(79, 172, 254, 0.2);
+            color: #4facfe;
+            font-weight: 600;
+        }
+
+        .data-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .data-table td {
+            color: #c0c0c0;
+        }
+
+        .preview-table {
+            margin-top: 10px;
+            font-size: 0.75rem;
+        }
+
+        .preview-table th,
+        .preview-table td {
+            padding: 4px 8px;
+        }
+
+        .click-hint {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 8px;
+            font-style: italic;
         }
 
         .tooltip-title {
@@ -307,6 +409,8 @@
         // Global data containers
         let MUTASI_DATA = [];
         let KANTOR_MAP = {}; // Maps KPP name -> { kota, kanwil }
+        let FLOW_DATA = {}; // Maps flow key -> array of mutation records
+        let CURRENT_VIEW_MODE = 'city';
 
         // Color palette
         const colorPalette = [
@@ -414,20 +518,34 @@
 
         // Extract KPP name from jabatan string - convert to CSV format
         function extractKPPName(jabatan) {
-            // Handle special KPP types (Wajib Pajak Besar, PMA, etc.)
-            const specialPatterns = [
-                /Kantor Pelayanan Pajak\s+(Wajib Pajak Besar)\s+(\w+)/i,
-                /Kantor Pelayanan Pajak\s+(Penanaman Modal Asing)\s+(\w+)/i,
-                /Kantor Pelayanan Pajak\s+(Badan dan Orang Asing)/i,
-                /Kantor Pelayanan Pajak\s+(Minyak dan Gas Bumi)/i,
-                /Kantor Pelayanan Pajak\s+(Perusahaan Masuk Bursa)/i
-            ];
+            // Handle special KPP types (Wajib Pajak Besar, PMA, etc.) with number words
+            const numberWords = '(?:Satu|Dua|Tiga|Empat|Lima|Enam)';
 
-            for (const pattern of specialPatterns) {
-                const match = jabatan.match(pattern);
-                if (match) {
-                    return match[2] ? `KPP ${match[1]} ${match[2]}` : `KPP ${match[1]}`;
-                }
+            // Wajib Pajak Besar + number
+            const wpBesarMatch = jabatan.match(new RegExp(`Kantor Pelayanan Pajak\\s+Wajib Pajak Besar\\s+(${numberWords})`, 'i'));
+            if (wpBesarMatch) {
+                return `KPP Wajib Pajak Besar ${wpBesarMatch[1]}`;
+            }
+
+            // Penanaman Modal Asing + number
+            const pmaMatch = jabatan.match(new RegExp(`Kantor Pelayanan Pajak\\s+Penanaman Modal Asing\\s+(${numberWords})`, 'i'));
+            if (pmaMatch) {
+                return `KPP Penanaman Modal Asing ${pmaMatch[1]}`;
+            }
+
+            // Badan dan Orang Asing (no number)
+            if (/Kantor Pelayanan Pajak\s+Badan dan Orang Asing/i.test(jabatan)) {
+                return 'KPP Badan dan Orang Asing';
+            }
+
+            // Minyak dan Gas Bumi (no number)
+            if (/Kantor Pelayanan Pajak\s+Minyak dan Gas Bumi/i.test(jabatan)) {
+                return 'KPP Minyak dan Gas Bumi';
+            }
+
+            // Perusahaan Masuk Bursa (no number)
+            if (/Kantor Pelayanan Pajak\s+Perusahaan Masuk Bursa/i.test(jabatan)) {
+                return 'KPP Perusahaan Masuk Bursa';
             }
 
             // Handle Madya Dua pattern (must be before Madya)
@@ -478,6 +596,14 @@
                 return 'Jakarta Khusus';
             }
 
+            // Handle Kantor Pengolahan Data dan Dokumen Perpajakan (KPDDP)
+            if (officeName.includes('Kantor Pengolahan Data dan Dokumen Perpajakan')) {
+                const match = officeName.match(/Kantor Pengolahan Data dan Dokumen Perpajakan\s+([^,]+)/i);
+                if (match) {
+                    return `KPDDP ${match[1].trim()}`;
+                }
+            }
+
             // Handle Kantor Wilayah and Direktorat
             if (officeName.includes('Kantor Wilayah DJP')) {
                 const match = officeName.match(/Kantor Wilayah DJP\s+([^,]+)/i);
@@ -523,10 +649,24 @@
                 return 'Kanwil Wajib Pajak Besar';
             }
 
+            // Handle Kantor Pengolahan Data dan Dokumen Perpajakan (KPDDP)
+            if (officeName.includes('Kantor Pengolahan Data dan Dokumen Perpajakan')) {
+                const match = officeName.match(/Kantor Pengolahan Data dan Dokumen Perpajakan\s+([^,]+)/i);
+                if (match) {
+                    const location = match[1].trim();
+                    // Map KPDDP locations to their kanwil
+                    const kpddpKanwilMap = {
+                        'Makassar': 'Kanwil Sulawesi Selatan, Barat, dan Tenggara',
+                        'Jambi': 'Kanwil Sumatera Barat dan Jambi'
+                    };
+                    return kpddpKanwilMap[location] || `KPDDP ${location}`;
+                }
+            }
+
             // Handle Kantor Wilayah
             if (officeName.includes('Kantor Wilayah DJP')) {
                 const match = officeName.match(/Kantor Wilayah DJP\s+([^,]+)/i);
-                return match ? `Kanwil ${match[1].trim()}` : 'Lainnya';
+                return match ? `Kanwil ${match[1].trim()}` : 'Kantor Pendukung';
             }
 
             // Handle Direktorat and central offices
@@ -534,7 +674,7 @@
                 return 'Kantor Pusat';
             }
 
-            return 'Lainnya';
+            return 'Kantor Pendukung';
         }
 
         // Helper function to check mutation type
@@ -566,6 +706,7 @@
 
             // Process flows
             const flows = {};
+            FLOW_DATA = {}; // Reset flow data
 
             filteredData.forEach(row => {
                 let source = getCity(row['Jabatan Lama']);
@@ -581,6 +722,10 @@
 
                 const key = `${source}|||${target}`;
                 flows[key] = (flows[key] || 0) + 1;
+
+                // Store mutation record for this flow
+                if (!FLOW_DATA[key]) FLOW_DATA[key] = [];
+                FLOW_DATA[key].push(row);
             });
 
             // Filter by minimum flow
@@ -618,11 +763,12 @@
             document.getElementById('total-kota-tujuan').textContent = kotaTujuan;
             document.getElementById('top-flow').textContent = topFlow;
 
-            renderSankey({ nodes, links });
+            renderSankey({ nodes, links }, CURRENT_VIEW_MODE);
             updateLegend(filteredFlows.slice(0, 10));
         }
 
-        function renderSankey(data) {
+        function renderSankey(data, viewMode) {
+            CURRENT_VIEW_MODE = viewMode;
             const container = document.getElementById('sankey-chart');
             container.innerHTML = '';
 
@@ -667,13 +813,37 @@
                 .attr('stroke', d => colorScale(d.source.name))
                 .attr('stroke-width', d => Math.max(1, d.width))
                 .on('mouseover', function (event, d) {
-                    showTooltip(event, `${d.sourceCity} → ${d.targetCity}`, `<strong>Jumlah Mutasi:</strong> ${d.value} orang`);
+                    const flowKey = `${d.sourceCity}|||${d.targetCity}`;
+                    const records = FLOW_DATA[flowKey] || [];
+                    const previewRecords = records.slice(0, 3);
+
+                    let previewTable = '';
+                    if (previewRecords.length > 0) {
+                        previewTable = `<table class="data-table preview-table">
+                            <thead><tr><th>Jabatan Lama</th><th>Jabatan Baru</th></tr></thead>
+                            <tbody>${previewRecords.map(r =>
+                            `<tr><td>${truncate(r['Jabatan Lama'], 40)}</td><td>${truncate(r['Jabatan Baru'], 40)}</td></tr>`
+                        ).join('')}</tbody>
+                        </table>`;
+                    }
+
+                    showTooltip(event,
+                        `${d.sourceCity} → ${d.targetCity}`,
+                        `<strong>Jumlah Mutasi:</strong> ${d.value} orang
+                        ${previewTable}
+                        <div class="click-hint">💡 Klik untuk lihat detail lengkap</div>`
+                    );
                     d3.select(this).attr('stroke-opacity', 0.7);
                 })
                 .on('mousemove', moveTooltip)
                 .on('mouseout', function () {
                     hideTooltip();
                     d3.select(this).attr('stroke-opacity', 0.4);
+                })
+                .on('click', function (event, d) {
+                    event.stopPropagation();
+                    const flowKey = `${d.sourceCity}|||${d.targetCity}`;
+                    showFlowModal(d.sourceCity, d.targetCity, flowKey);
                 });
 
             // Nodes
@@ -701,11 +871,16 @@
 
                     showTooltip(event,
                         d.name.replace(/ \(Asal\)| \(Tujuan\)/g, ''),
-                        `<strong>Total:</strong> ${total} mutasi<br><br><strong>Top 5 ${isSource ? 'Tujuan' : 'Asal'}:</strong><br>${details}`
+                        `<strong>Total:</strong> ${total} mutasi<br><br><strong>Top 5 ${isSource ? 'Tujuan' : 'Asal'}:</strong><br>${details}
+                        <div class="click-hint">💡 Klik untuk lihat semua mutasi</div>`
                     );
                 })
                 .on('mousemove', moveTooltip)
-                .on('mouseout', hideTooltip);
+                .on('mouseout', hideTooltip)
+                .on('click', function (event, d) {
+                    event.stopPropagation();
+                    showNodeModal(d.name, links);
+                });
 
             // Labels
             node.append('text')
@@ -746,6 +921,115 @@
         function hideTooltip() {
             document.getElementById('tooltip').style.display = 'none';
         }
+
+        function truncate(str, len) {
+            if (!str) return '';
+            return str.length > len ? str.substring(0, len) + '...' : str;
+        }
+
+        function showFlowModal(source, target, flowKey) {
+            const records = FLOW_DATA[flowKey] || [];
+
+            const modalHTML = `
+                <div class="modal-overlay" onclick="closeModal()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <div class="modal-title">📊 Mutasi: ${source} → ${target}</div>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <p style="margin-bottom: 15px; color: #a0a0a0;">Total: <strong style="color: #4facfe;">${records.length}</strong> mutasi</p>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Nama</th>
+                                    <th>Jabatan Lama</th>
+                                    <th>Jabatan Baru</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${records.slice(0, 100).map((r, i) => `
+                                    <tr>
+                                        <td>${i + 1}</td>
+                                        <td>${r['Nama'] || '*****'}</td>
+                                        <td>${r['Jabatan Lama']}</td>
+                                        <td>${r['Jabatan Baru']}</td>
+                                    </tr>
+                                `).join('')}
+                                ${records.length > 100 ? `<tr><td colspan="4" style="text-align:center; color:#888;">... dan ${records.length - 100} record lainnya</td></tr>` : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function showNodeModal(nodeName, links) {
+            const isSource = nodeName.includes('(Asal)');
+            const cityName = nodeName.replace(/ \(Asal\)| \(Tujuan\)/g, '');
+
+            // Collect all records for this node
+            let allRecords = [];
+            links.forEach(l => {
+                if ((isSource && l.source.name === nodeName) || (!isSource && l.target.name === nodeName)) {
+                    const flowKey = `${l.sourceCity}|||${l.targetCity}`;
+                    const records = FLOW_DATA[flowKey] || [];
+                    allRecords = allRecords.concat(records.map(r => ({
+                        ...r,
+                        _direction: isSource ? l.targetCity : l.sourceCity
+                    })));
+                }
+            });
+
+            const modalHTML = `
+                <div class="modal-overlay" onclick="closeModal()">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <div class="modal-title">📊 ${isSource ? 'Mutasi DARI' : 'Mutasi KE'} ${cityName}</div>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <p style="margin-bottom: 15px; color: #a0a0a0;">Total: <strong style="color: #4facfe;">${allRecords.length}</strong> mutasi</p>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Nama</th>
+                                    <th>${isSource ? 'Tujuan' : 'Asal'}</th>
+                                    <th>Jabatan Lama</th>
+                                    <th>Jabatan Baru</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${allRecords.slice(0, 100).map((r, i) => `
+                                    <tr>
+                                        <td>${i + 1}</td>
+                                        <td>${r['Nama'] || '*****'}</td>
+                                        <td>${r._direction}</td>
+                                        <td>${truncate(r['Jabatan Lama'], 50)}</td>
+                                        <td>${truncate(r['Jabatan Baru'], 50)}</td>
+                                    </tr>
+                                `).join('')}
+                                ${allRecords.length > 100 ? `<tr><td colspan="5" style="text-align:center; color:#888;">... dan ${allRecords.length - 100} record lainnya</td></tr>` : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) modal.remove();
+        }
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
 
         // Event listeners
         document.getElementById('mutation-type').addEventListener('change', processAndRender);
